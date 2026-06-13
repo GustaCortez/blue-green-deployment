@@ -5,11 +5,11 @@
 RESOURCE_GROUP="rg-blue-green-demo"
 LOCATION="eastus"
 APP_SERVICE_PLAN="plan-blue-green"
-APP_NAME="miapp"              # ← cambia por un nombre único en Azure
+APP_NAME="miapp-jalapa-2026"              # ← cambia por un nombre único en Azure
 
 echo "=== Setup Blue-Green Deployment en Azure ==="
 
-# 1. Resource Group
+# 1. Resource Group (si ya existe, no falla)
 echo "[1/5] Creando Resource Group..."
 az group create \
   --name "$RESOURCE_GROUP" \
@@ -24,12 +24,13 @@ az appservice plan create \
   --is-linux
 
 # 3. Web App (slot de producción = slot principal)
+# NODE:20-lts es el runtime actual soportado en Azure Linux
 echo "[3/5] Creando Web App (slot producción)..."
 az webapp create \
   --name "$APP_NAME" \
   --resource-group "$RESOURCE_GROUP" \
   --plan "$APP_SERVICE_PLAN" \
-  --runtime "NODE:18-lts"
+  --runtime "NODE|22-lts"
 
 # 4. Configurar variables de producción
 az webapp config appsettings set \
@@ -56,11 +57,14 @@ az webapp config appsettings set \
     DEPLOYMENT_COLOR=green \
     NODE_ENV=staging
 
+# 6. Credenciales para GitHub Actions
+# MSYS_NO_PATHCONV=1 evita que Git Bash convierta /subscriptions/ a ruta de Windows
 echo "[5/5] Generando credenciales para GitHub Actions..."
-az ad sp create-for-rbac \
+SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+MSYS_NO_PATHCONV=1 az ad sp create-for-rbac \
   --name "sp-blue-green-deploy" \
   --role contributor \
-  --scopes "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/$RESOURCE_GROUP" \
+  --scopes "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP" \
   --sdk-auth
 
 echo ""
