@@ -38,7 +38,7 @@ jobs:
             public/
             package.json
             package-lock.json
-            web.config
+            node_modules/
 
   # ── 2. DEPLOY A STAGING (slot verde) ─────────────────────────────────────────
   deploy-staging:
@@ -58,25 +58,33 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Configurar startup antes del deploy
+        uses: azure/CLI@v2
+        with:
+          inlineScript: |
+            az webapp config set \
+              --name ${{ env.AZURE_WEBAPP_NAME }} \
+              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+              --slot staging \
+              --startup-file "node src/server.js"
+
+            az webapp config appsettings set \
+              --name ${{ env.AZURE_WEBAPP_NAME }} \
+              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+              --slot staging \
+              --settings \
+                SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+                WEBSITE_NODE_DEFAULT_VERSION="~22" \
+                APP_VERSION="${{ github.sha }}" \
+                DEPLOYMENT_COLOR="green" \
+                NODE_ENV="staging"
+
       - name: Deploy al slot staging
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           slot-name: staging
           package: .
-
-      - name: Configurar variables del slot staging
-        uses: azure/CLI@v2
-        with:
-          inlineScript: |
-            az webapp config appsettings set \
-              --name ${{ env.AZURE_WEBAPP_NAME }} \
-              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-              --slot staging \
-              --settings \
-                APP_VERSION="${{ github.sha }}" \
-                DEPLOYMENT_COLOR="green" \
-                NODE_ENV="staging"
 
   # ── 3. VALIDACIÓN EN STAGING ──────────────────────────────────────────────────
   validate-staging:
@@ -86,14 +94,14 @@ jobs:
 
     steps:
       - name: Esperar que el slot arranque
-        run: sleep 20
+        run: sleep 60
 
       - name: Health check en staging
         run: |
           STAGING_URL="https://${{ env.AZURE_WEBAPP_NAME }}-staging.azurewebsites.net/health"
           echo "Verificando: $STAGING_URL"
 
-          for i in {1..5}; do
+          for i in {1..8}; do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$STAGING_URL")
             BODY=$(curl -s "$STAGING_URL")
             echo "Intento $i — HTTP $STATUS"
@@ -106,10 +114,10 @@ jobs:
                 exit 0
               fi
             fi
-            sleep 10
+            sleep 15
           done
 
-          echo "Health check FALLÓ después de 5 intentos"
+          echo "Health check FALLÓ después de 8 intentos"
           exit 1
 
   # ── 4. SWAP: staging → producción ────────────────────────────────────────────
@@ -138,7 +146,7 @@ jobs:
       - name: Verificar producción post-swap
         run: |
           PROD_URL="https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/health"
-          sleep 10
+          sleep 15
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PROD_URL")
           if [ "$STATUS" != "200" ]; then
             echo "ERROR: producción no responde después del swap (HTTP $STATUS)"
