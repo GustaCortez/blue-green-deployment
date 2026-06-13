@@ -1,0 +1,167 @@
+name: Blue-Green Deploy to Azure
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:          # permite disparar manualmente desde GitHub
+
+env:
+  AZURE_WEBAPP_NAME: miapp       # nombre de tu App Service en Azure
+  NODE_VERSION: '18.x'
+
+jobs:
+  # ── 1. BUILD & TEST ──────────────────────────────────────────────────────────
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Subir artefacto de build
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-build
+          path: |
+            src/
+            public/
+            package.json
+            package-lock.json
+            web.config
+
+  # ── 2. DEPLOY A STAGING (slot verde) ─────────────────────────────────────────
+  deploy-staging:
+    name: Deploy → Slot Staging (Verde)
+    runs-on: ubuntu-latest
+    needs: build
+    environment: staging
+
+    steps:
+      - name: Descargar artefacto
+        uses: actions/download-artifact@v4
+        with:
+          name: app-build
+
+      - name: Login en Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy al slot staging
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          slot-name: staging
+          package: .
+
+      - name: Configurar variables del slot staging
+        uses: azure/appservice-settings@v1
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          slot-name: staging
+          app-settings-json: |
+            [
+              { "name": "APP_VERSION",        "value": "${{ github.sha }}", "slotSetting": true },
+              { "name": "DEPLOYMENT_COLOR",   "value": "green",             "slotSetting": true },
+              { "name": "NODE_ENV",           "value": "staging",           "slotSetting": true }
+            ]
+
+  # ── 3. VALIDACIÓN EN STAGING ──────────────────────────────────────────────────
+  validate-staging:
+    name: Validar Health en Staging
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+
+    steps:
+      - name: Esperar que el slot arranque
+        run: sleep 15
+
+      - name: Health check en staging
+        run: |
+          STAGING_URL="https://${{ env.AZURE_WEBAPP_NAME }}-staging.azurewebsites.net/health"
+          echo "Verificando: $STAGING_URL"
+
+          for i in {1..5}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$STAGING_URL")
+            BODY=$(curl -s "$STAGING_URL")
+
+            echo "Intento $i — HTTP $STATUS"
+            echo "$BODY"
+
+            if [ "$STATUS" = "200" ]; then
+              HEALTH=$(echo "$BODY" | python3 -c "import sys, json; print(json.load(sys.stdin)['status'])")
+              if [ "$HEALTH" = "healthy" ]; then
+                echo "Health check PASÓ"
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+
+          echo "Health check FALLÓ después de 5 intentos"
+          exit 1
+
+  # ── 4. SWAP: staging → producción ────────────────────────────────────────────
+  swap-to-production:
+    name: SWAP Staging → Producción
+    runs-on: ubuntu-latest
+    needs: validate-staging
+    environment: production        # requiere aprobación manual en GitHub
+
+    steps:
+      - name: Login en Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Ejecutar swap de slots
+        run: |
+          az webapp deployment slot swap \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --slot staging \
+            --target-slot production
+
+      - name: Verificar producción post-swap
+        run: |
+          PROD_URL="https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/health"
+          sleep 10
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PROD_URL")
+          if [ "$STATUS" != "200" ]; then
+            echo "ERROR: producción no responde después del swap (HTTP $STATUS)"
+            exit 1
+          fi
+          echo "Swap completado exitosamente"
+
+  # ── 5. ROLLBACK (solo si falla swap) ─────────────────────────────────────────
+  rollback:
+    name: Rollback automático
+    runs-on: ubuntu-latest
+    needs: swap-to-production
+    if: failure()
+
+    steps:
+      - name: Login en Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Re-swap para revertir
+        run: |
+          echo "Iniciando rollback — re-swap para restaurar versión anterior"
+          az webapp deployment slot swap \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --slot staging \
+            --target-slot production
+          echo "Rollback completado"

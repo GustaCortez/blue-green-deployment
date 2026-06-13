@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mi App — Blue-Green Deployment</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div id="slot-badge" class="badge">Cargando...</div>
+      <h1>Blue-Green Deployment</h1>
+      <p class="subtitle">Azure App Service + GitHub Actions</p>
+    </header>
+
+    <main>
+      <section class="card" id="info-card">
+        <h2>Estado del Deployment</h2>
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="label">Slot activo</span>
+            <span class="value" id="slot-name">—</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Versión</span>
+            <span class="value" id="app-version">—</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Color</span>
+            <span class="value" id="deploy-color">—</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Ambiente</span>
+            <span class="value" id="environment">—</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Health Check</h2>
+        <div class="health-status">
+          <div class="health-dot" id="health-dot"></div>
+          <span id="health-text">Verificando...</span>
+        </div>
+        <p class="uptime">Uptime: <span id="uptime">—</span></p>
+        <button class="btn" onclick="refreshStatus()">Actualizar estado</button>
+      </section>
+
+      <section class="card diagram">
+        <h2>Flujo Blue-Green</h2>
+        <div class="flow">
+          <div class="flow-step green">
+            <strong>Slot VERDE</strong>
+            <small>Staging (nueva versión)</small>
+          </div>
+          <div class="flow-arrow">SWAP →</div>
+          <div class="flow-step blue">
+            <strong>Slot AZUL</strong>
+            <small>Producción (activo)</small>
+          </div>
+        </div>
+        <p class="flow-note">Si algo falla: re-swap instantáneo para rollback</p>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

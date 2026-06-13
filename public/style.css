@@ -1,0 +1,176 @@
+:root {
+  --blue: #1e90ff;
+  --green: #28a745;
+  --dark: #1a1a2e;
+  --card-bg: #16213e;
+  --text: #e0e0e0;
+  --muted: #888;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--dark);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  min-height: 100vh;
+  padding: 2rem 1rem;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+header h1 {
+  font-size: 2rem;
+  margin-bottom: 0.25rem;
+}
+
+.subtitle {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.3rem 1rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 1rem;
+  background: var(--blue);
+  color: #fff;
+  transition: background 0.4s;
+}
+
+.badge.green { background: var(--green); }
+.badge.blue  { background: var(--blue); }
+
+.card {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid #2a2a4a;
+}
+
+.card h2 {
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.value {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.health-status {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.health-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: background 0.3s;
+}
+
+.health-dot.ok      { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.health-dot.error   { background: #dc3545; box-shadow: 0 0 8px #dc3545; }
+
+.uptime {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.btn {
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1.25rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: opacity 0.2s;
+}
+
+.btn:hover { opacity: 0.85; }
+
+.flow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.flow-step {
+  flex: 1;
+  min-width: 130px;
+  padding: 1rem;
+  border-radius: 8px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.flow-step strong { font-size: 0.95rem; }
+.flow-step small  { font-size: 0.75rem; opacity: 0.8; }
+
+.flow-step.green { background: rgba(40,167,69,0.2); border: 1px solid var(--green); }
+.flow-step.blue  { background: rgba(30,144,255,0.2); border: 1px solid var(--blue); }
+
+.flow-arrow {
+  font-weight: 700;
+  color: #fff;
+  font-size: 1rem;
+}
+
+.flow-note {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* Temas dinámicos según slot */
+body.slot-staging  { --accent: var(--green); }
+body.slot-production { --accent: var(--blue); }
