@@ -3,11 +3,12 @@ name: Blue-Green Deploy to Azure
 on:
   push:
     branches: [main]
-  workflow_dispatch:          # permite disparar manualmente desde GitHub
+  workflow_dispatch:
 
 env:
-  AZURE_WEBAPP_NAME: miapp       # nombre de tu App Service en Azure
-  NODE_VERSION: '18.x'
+  AZURE_WEBAPP_NAME: miapp-jalapa-2026
+  NODE_VERSION: '22.x'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ── 1. BUILD & TEST ──────────────────────────────────────────────────────────
@@ -53,7 +54,7 @@ jobs:
           name: app-build
 
       - name: Login en Azure
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
@@ -65,16 +66,17 @@ jobs:
           package: .
 
       - name: Configurar variables del slot staging
-        uses: azure/appservice-settings@v1
+        uses: azure/CLI@v2
         with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          slot-name: staging
-          app-settings-json: |
-            [
-              { "name": "APP_VERSION",        "value": "${{ github.sha }}", "slotSetting": true },
-              { "name": "DEPLOYMENT_COLOR",   "value": "green",             "slotSetting": true },
-              { "name": "NODE_ENV",           "value": "staging",           "slotSetting": true }
-            ]
+          inlineScript: |
+            az webapp config appsettings set \
+              --name ${{ env.AZURE_WEBAPP_NAME }} \
+              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+              --slot staging \
+              --settings \
+                APP_VERSION="${{ github.sha }}" \
+                DEPLOYMENT_COLOR="green" \
+                NODE_ENV="staging"
 
   # ── 3. VALIDACIÓN EN STAGING ──────────────────────────────────────────────────
   validate-staging:
@@ -84,7 +86,7 @@ jobs:
 
     steps:
       - name: Esperar que el slot arranque
-        run: sleep 15
+        run: sleep 20
 
       - name: Health check en staging
         run: |
@@ -94,7 +96,6 @@ jobs:
           for i in {1..5}; do
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$STAGING_URL")
             BODY=$(curl -s "$STAGING_URL")
-
             echo "Intento $i — HTTP $STATUS"
             echo "$BODY"
 
@@ -116,21 +117,23 @@ jobs:
     name: SWAP Staging → Producción
     runs-on: ubuntu-latest
     needs: validate-staging
-    environment: production        # requiere aprobación manual en GitHub
+    environment: production
 
     steps:
       - name: Login en Azure
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Ejecutar swap de slots
-        run: |
-          az webapp deployment slot swap \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-            --name ${{ env.AZURE_WEBAPP_NAME }} \
-            --slot staging \
-            --target-slot production
+        uses: azure/CLI@v2
+        with:
+          inlineScript: |
+            az webapp deployment slot swap \
+              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+              --name ${{ env.AZURE_WEBAPP_NAME }} \
+              --slot staging \
+              --target-slot production
 
       - name: Verificar producción post-swap
         run: |
@@ -152,16 +155,18 @@ jobs:
 
     steps:
       - name: Login en Azure
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Re-swap para revertir
-        run: |
-          echo "Iniciando rollback — re-swap para restaurar versión anterior"
-          az webapp deployment slot swap \
-            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
-            --name ${{ env.AZURE_WEBAPP_NAME }} \
-            --slot staging \
-            --target-slot production
-          echo "Rollback completado"
+        uses: azure/CLI@v2
+        with:
+          inlineScript: |
+            echo "Iniciando rollback — re-swap para restaurar versión anterior"
+            az webapp deployment slot swap \
+              --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+              --name ${{ env.AZURE_WEBAPP_NAME }} \
+              --slot staging \
+              --target-slot production
+            echo "Rollback completado"
