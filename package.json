@@ -1,6 +1,6 @@
 {
   "name": "miapp-blue-green",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Blue-Green Deployment demo app on Azure App Service",
   "main": "src/server.js",
   "scripts": {

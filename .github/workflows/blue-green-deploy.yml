@@ -68,6 +68,9 @@ jobs:
               --slot staging \
               --startup-file "node src/server.js"
 
+      - name: Esperar reinicio del slot
+        run: sleep 30
+
       - name: Configurar variables de entorno
         uses: azure/CLI@v2
         with:
